@@ -53,6 +53,8 @@ VOID waypoint(PSPAWNINFO pChar, PCHAR szLine);
 
 VOID ExactLocation(PSPAWNINFO pChar, PCHAR szLine)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
 	CHAR LocMsg[MAX_STRING] = { 0 };
 	sprintf_s(LocMsg, "Your location is %3.6f, %3.6f, %3.6f", pChar->Y, pChar->X, pChar->Z);
 	WriteChatColor(LocMsg);
@@ -60,6 +62,8 @@ VOID ExactLocation(PSPAWNINFO pChar, PCHAR szLine)
 
 VOID zWarp(PSPAWNINFO pChar, PCHAR szLine)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
 	CHAR Z[MAX_STRING] = { 0 };
 	GetArg(Z, szLine, 1);
 	float MyY = pChar->Y;
@@ -76,6 +80,12 @@ VOID zWarp(PSPAWNINFO pChar, PCHAR szLine)
 
 VOID Warp(PSPAWNINFO pChar, PCHAR szLine)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
+	if (CDisplay__MoveLocalPlayerToSafeCoords == 0x0 || LocalCEverQuest__DoTheZone == 0x0)
+	{
+		AoBScan();
+	}
 	static float LastY, LastX, LastZ;
 	bRunNextCommand = TRUE;
 	PSPAWNINFO psTarget = NULL;
@@ -183,6 +193,8 @@ VOID Warp(PSPAWNINFO pChar, PCHAR szLine)
 
 VOID waypoint(PSPAWNINFO pChar, PCHAR szLine)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
 	PZONEINFO Zone = (PZONEINFO)pZoneInfo;
 	CHAR WaypointsINI[MAX_STRING] = { 0 };
 	CHAR szTemp[10] = { 0 };
@@ -263,6 +275,8 @@ VOID waypoint(PSPAWNINFO pChar, PCHAR szLine)
 // Function to write a float value to a specific memory address
 void WriteFloatToMemory(DWORD_PTR address, float value)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
 	DWORD oldProtect;
 	VirtualProtect((LPVOID)address, sizeof(float), PAGE_EXECUTE_READWRITE, &oldProtect);
 	*(float*)address = value;
@@ -270,6 +284,12 @@ void WriteFloatToMemory(DWORD_PTR address, float value)
 }
 VOID DoWarp(float y, float x, float z)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
+	if (CDisplay__MoveLocalPlayerToSafeCoords == 0x0 || LocalCEverQuest__DoTheZone == 0x0)
+	{
+		AoBScan();
+	}
 	PZONEINFO Zone = (PZONEINFO)pZoneInfo;
 	float SafeY = Zone->SafeYLoc;
 	float SafeX = Zone->SafeXLoc;
@@ -297,12 +317,34 @@ VOID DoWarp(float y, float x, float z)
 	Zone->SafeZLoc = SafeZ;
 }
 
-// Function to convert DWORD to hexadecimal string
+//// Function to convert DWORD to hexadecimal string
 std::string DWORDToHexString(DWORD value, INT maxLength) {
 	std::stringstream stream;
 	stream << "0x" << std::uppercase << std::setfill('0') << std::setw(maxLength) << std::hex << value;
 	return stream.str();
 }
+//std::string DWORDToHexString(DWORD_PTR value, int width = 6) {
+//	std::stringstream stream;
+//	stream << "0x" << std::uppercase << std::hex << std::setw(width) << std::setfill('0') << value;
+//	return stream.str();
+//}
+
+DWORD_PTR HexStringToDWORD(const std::string& hexStr) {
+	std::string s = hexStr;
+
+	// Remove "0x" or "0X" prefix if present
+	if (s.size() > 2 && (s[0] == '0') && (std::tolower(s[1]) == 'x')) {
+		s = s.substr(2);
+	}
+
+	DWORD_PTR value = 0;
+	std::stringstream ss;
+	ss << std::hex << s;
+	ss >> value;
+
+	return value;
+}
+
 
 DWORD_PTR GetModuleBaseAddress(DWORD dwProcID, LPCSTR moduleName) {
 	DWORD_PTR dwBaseAddress = 0;
@@ -324,8 +366,16 @@ DWORD_PTR GetModuleBaseAddress(DWORD dwProcID, LPCSTR moduleName) {
 
 VOID AoBScan()
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
+
 	const char* moduleName = "eqgame.exe";
 	DWORD_PTR baseAddress = GetModuleBaseAddress(GetCurrentProcessId(), moduleName);
+	if (!baseAddress)
+	{
+		WriteChatColor("[MQ2RWarp] Failed to get base address", CONCOLOR_RED);
+		return;
+	}
 	std::string message3 = "[MQ2RWarp]BaseAddress: " + DWORDToHexString(baseAddress, 6);
 	WriteChatColor(message3.c_str(), CONCOLOR_RED);
 	BASE_ADDRESS = baseAddress;
@@ -353,10 +403,15 @@ VOID AoBScan()
 		std::string message2 = "[MQ2RWarp]LocalCEverQuest__DoTheZone: " + DWORDToHexString(PlayerStructBase2, 6);
 		WriteChatColor(message2.c_str(), CONCOLOR_RED);
 		getchar();
+	} else {
+		std::string message3 = "[MQ2RWarp]Failed to get: CDisplay__MoveLocalPlayerToSafeCoords";
+		WriteChatColor(message3.c_str(), CONCOLOR_RED);
+		std::string message4 = "[MQ2RWarp]Failed to get: LocalCEverQuest__DoTheZone";
+		WriteChatColor(message4.c_str(), CONCOLOR_RED);
 	}
 }
 
-VOID ShowOffsetS()
+VOID ShowOffsets()
 {
 	std::string message1 = "[MQ2RWarp]CDisplay__MoveLocalPlayerToSafeCoords: " + DWORDToHexString(CDisplay__MoveLocalPlayerToSafeCoords, 6);
 	WriteChatColor(message1.c_str(), CONCOLOR_RED);
@@ -366,11 +421,13 @@ VOID ShowOffsetS()
 
 VOID DoShowOffsets(PSPAWNINFO pChar, PCHAR szLine)
 {
-	ShowOffsetS();
+	ShowOffsets();
 }
 
 VOID DoAoBScan(PSPAWNINFO pChar, PCHAR szLine)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
 	WriteChatColor("[MQ2RWarp]Starting AoB scan...", CONCOLOR_GREEN);
 	AoBScan();
 	WriteChatColor("[MQ2RWarp]AoB scan completed.", CONCOLOR_GREEN);
@@ -386,6 +443,8 @@ VOID GateBind(PSPAWNINFO pChar, PCHAR szLine)
 
 VOID ZoneShift(PSPAWNINFO pChar, PCHAR szLine)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
 	CHAR szMsg[MAX_STRING] = { 0 };
 	DWORD ZoneToGoTo = GetZoneID(szLine);
 
@@ -404,6 +463,8 @@ VOID ZoneShift(PSPAWNINFO pChar, PCHAR szLine)
 
 VOID doFade(PSPAWNINFO pChar, PCHAR szLine)
 {
+	if (GetGameState() != GAMESTATE_INGAME)
+		return;
 	PZONEINFO Zone = (PZONEINFO)pZoneInfo;
 	int nZoneID = GetZoneID(Zone->ShortName);
 
@@ -416,6 +477,18 @@ VOID doFade(PSPAWNINFO pChar, PCHAR szLine)
 	WriteChatColor("Fading Memories.", COLOR_PURPLE);
 	pChar->Type = SPAWN_CORPSE;
 }
+
+PLUGIN_API VOID OnPulse()
+{
+	static bool scanned = false;
+
+	if (!scanned && GetGameState() == GAMESTATE_INGAME)
+	{
+		AoBScan();
+		scanned = true;  // Only scan once per plugin load/game session
+	}
+}
+
 
 PLUGIN_API VOID InitializePlugin(VOID)
 {
