@@ -14,7 +14,6 @@
 #include <iomanip>
 #include <string>
 #include <intrin.h>
-#include "Sig.h"
 
 PreSetup("MQ2RWarp");
 PLUGIN_VERSION(0.1);
@@ -30,7 +29,7 @@ PLUGIN_VERSION(0.1);
 #undef ZoneShift
 #undef ZoneToGoTo
 
-DWORD BASE_ADDRESS = 0x5D0000;
+DWORD BASE_ADDRESS = EQGameBaseAddress;
 DWORD ADDRESS_SAFE_Y = 0x9DFB3C;
 DWORD ADDRESS_SAFE_X = 0x9DFB40;
 DWORD ADDRESS_SAFE_Z = 0x9DFB44;
@@ -272,8 +271,7 @@ VOID waypoint(PSPAWNINFO pChar, PCHAR szLine)
 	}
 }
 
-// Function to write a float value to a specific memory address
-void WriteFloatToMemory(DWORD_PTR address, float value)
+VOID WriteFloatToMemory(DWORD_PTR address, float value)
 {
 	if (GetGameState() != GAMESTATE_INGAME)
 		return;
@@ -317,17 +315,11 @@ VOID DoWarp(float y, float x, float z)
 	Zone->SafeZLoc = SafeZ;
 }
 
-//// Function to convert DWORD to hexadecimal string
 std::string DWORDToHexString(DWORD value, INT maxLength) {
 	std::stringstream stream;
 	stream << "0x" << std::uppercase << std::setfill('0') << std::setw(maxLength) << std::hex << value;
 	return stream.str();
 }
-//std::string DWORDToHexString(DWORD_PTR value, int width = 6) {
-//	std::stringstream stream;
-//	stream << "0x" << std::uppercase << std::hex << std::setw(width) << std::setfill('0') << value;
-//	return stream.str();
-//}
 
 DWORD_PTR HexStringToDWORD(const std::string& hexStr) {
 	std::string s = hexStr;
@@ -345,70 +337,35 @@ DWORD_PTR HexStringToDWORD(const std::string& hexStr) {
 	return value;
 }
 
-
-DWORD_PTR GetModuleBaseAddress(DWORD dwProcID, LPCSTR moduleName) {
-	DWORD_PTR dwBaseAddress = 0;
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, dwProcID);
-	if (hSnapshot != INVALID_HANDLE_VALUE) {
-		MODULEENTRY32 ModuleEntry32 = { sizeof(ModuleEntry32) };
-		if (Module32First(hSnapshot, &ModuleEntry32)) {
-			do {
-				if (!_stricmp(ModuleEntry32.szModule, moduleName)) {
-					dwBaseAddress = reinterpret_cast<DWORD_PTR>(ModuleEntry32.modBaseAddr);
-					break;
-				}
-			} while (Module32Next(hSnapshot, &ModuleEntry32));
-		}
-		CloseHandle(hSnapshot);
-	}
-	return dwBaseAddress;
-}
-
 VOID AoBScan()
 {
 	if (GetGameState() != GAMESTATE_INGAME)
 		return;
 
-	const char* moduleName = "eqgame.exe";
-	DWORD_PTR baseAddress = GetModuleBaseAddress(GetCurrentProcessId(), moduleName);
-	if (!baseAddress)
-	{
-		WriteChatColor("[MQ2RWarp] Failed to get base address", CONCOLOR_RED);
-		return;
-	}
+	EQGameBaseAddress = (uintptr_t)::GetModuleHandleW(nullptr);
+	DWORD_PTR baseAddress = EQGameBaseAddress;
 	std::string message3 = "[MQ2RWarp]BaseAddress: " + DWORDToHexString(baseAddress, 6);
 	WriteChatColor(message3.c_str(), CONCOLOR_RED);
 	BASE_ADDRESS = baseAddress;
+	MODULEINFO modInfo;
+	HMODULE hModule = GetModuleHandle("eqgame.exe");
+	GetModuleInformation(GetCurrentProcess(), hModule, &modInfo, sizeof(modInfo));
 
 	// Pattern and mask for MoveLocalPlayerToSafeCoords
-	char* patternMLPTSC = "\xD9\x05\x00\x00\x00\x00\xA1\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xD9\x58\x64\xD9\xC9\xD9\x58\x68\xD9\x58\x6C\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\x6A\x00\x6A\x00\x6A\x03\xE8\x00\x00\x00\x00\xD9\xEE\xA1\x00\x00\x00\x00\xD9\x50\x70\xD9\x50\x74\x6A\x00\xD9\x50\x78\xA1\x00\x00\x00\x00\xD9\x90\x8C\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xD9\x91\x88\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xD9\x5A\x7C\xA1\x00\x00\x00\x00\xC7\x40\x24\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xC7\x81\xD4\x02\x00\x00\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x85\xC0\x74\x40\x8B\x50\x08\x8B\x4A\x04\x8B\x54\x01\x08\x8D\x4C\x01\x08\x8B\x42\x58\xFF\xD0\xD9\x05\x00\x00\x00\x00\xA1\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\x8B\x48\x08\xD9\x05\x00\x00\x00\x00\x8B\x51\x04\xD9\x5C\x02\x34\x8D\x44\x02\x08\xD9\xC9\xD9\x58\x30\xD9\x58\x34\xD9\x05\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xD8\x05\x00\x00\x00\x00\x6A\x01\x83\xEC\x0C\xD9\x5C\x24\x08\xD9\x05\x00\x00\x00\x00\xD9\x5C\x24\x04\xD9\x05\x00\x00\x00\x00\xD9\x1C\x24\xE8\x00\x00\x00\x00\xFF\x05\x00\x00\x00\x00\xD9\xC0\xD9\x05\x00\x00\x00\x00\xDA\xE9\xDF\xE0\xF6\xC4\x44\x7B\x0A\xA1\x00\x00\x00\x00\xD9\x58\x28\xEB\x02\xDD\xD8\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\x85\xC9\x0F\x84\x00\x00\x00\x00\x3B\x00\x00\x00\x00\x00\x0F\x84\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x85\xC0\x75\x13\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x85\xC0\x0F\x84\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xA1\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\x6A\x01\xD9\x05\x00\x00\x00\x00\x83\xEC\x0C\xD9\x58\x64\xD9\xC9\xD9\x58\x68\xD9\x58\x6C\x8B\x00\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xD8\x05\x00\x00\x00\x00\xD9\x5C\x24\x08\xD9\x05\x00\x00\x00\x00\xD9\x5C\x24\x04\xD9\x05\x00\x00\x00\x00\xD9\x1C\x24\xE8\x00\x00\x00\x00\xD9\xC0\xD9\x05\x00\x00\x00\x00\xDA\xE9\xDF\xE0\xF6\xC4\x44\x7B\x14\x8B\x00\x00\x00\x00\x00\xD9\x59\x28\x8B\x00\x00\x00\x00\x00\xE9\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xDD\xD8\xE9\x00\x00\x00\x00\xC3";
+	const uint8_t patternMLPTSC[] = { 0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x58 ,0x64 ,0xD9 ,0xC9 ,0xD9 ,0x58 ,0x68 ,0xD9 ,0x58 ,0x6C ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x6A ,0x00 ,0x6A ,0x00 ,0x6A ,0x03 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0xEE ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x50 ,0x70 ,0xD9 ,0x50 ,0x74 ,0x6A ,0x00 ,0xD9 ,0x50 ,0x78 ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x90 ,0x8C ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x91 ,0x88 ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x5A ,0x7C ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0xC7 ,0x40 ,0x24 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xC7 ,0x81 ,0xD4 ,0x02 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0x85 ,0xC0 ,0x74 ,0x40 ,0x8B ,0x50 ,0x08 ,0x8B ,0x4A ,0x04 ,0x8B ,0x54 ,0x01 ,0x08 ,0x8D ,0x4C ,0x01 ,0x08 ,0x8B ,0x42 ,0x58 ,0xFF ,0xD0 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x48 ,0x08 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x51 ,0x04 ,0xD9 ,0x5C ,0x02 ,0x34 ,0x8D ,0x44 ,0x02 ,0x08 ,0xD9 ,0xC9 ,0xD9 ,0x58 ,0x30 ,0xD9 ,0x58 ,0x34 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD8 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0x6A ,0x01 ,0x83 ,0xEC ,0x0C ,0xD9 ,0x5C ,0x24 ,0x08 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x5C ,0x24 ,0x04 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x1C ,0x24 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0xFF ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0xC0 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xDA ,0xE9 ,0xDF ,0xE0 ,0xF6 ,0xC4 ,0x44 ,0x7B ,0x0A ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x58 ,0x28 ,0xEB ,0x02 ,0xDD ,0xD8 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x85 ,0xC9 ,0x0F ,0x84 ,0x00 ,0x00 ,0x00 ,0x00 ,0x3B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0x0F ,0x84 ,0x00 ,0x00 ,0x00 ,0x00 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0x85 ,0xC0 ,0x75 ,0x13 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0x85 ,0xC0 ,0x0F ,0x84 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xA1 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0x6A ,0x01 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0x83 ,0xEC ,0x0C ,0xD9 ,0x58 ,0x64 ,0xD9 ,0xC9 ,0xD9 ,0x58 ,0x68 ,0xD9 ,0x58 ,0x6C ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD8 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x5C ,0x24 ,0x08 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x5C ,0x24 ,0x04 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x1C ,0x24 ,0xE8 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0xC0 ,0xD9 ,0x05 ,0x00 ,0x00 ,0x00 ,0x00 ,0xDA ,0xE9 ,0xDF ,0xE0 ,0xF6 ,0xC4 ,0x44 ,0x7B ,0x14 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xD9 ,0x59 ,0x28 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xE9 ,0x00 ,0x00 ,0x00 ,0x00 ,0x8B ,0x00 ,0x00 ,0x00 ,0x00 ,0x00 ,0xDD ,0xD8 ,0xE9 ,0x00 ,0x00 ,0x00 ,0x00 ,0xC3 };
+	//char* patternMLPTSC = "\xD9\x05\x00\x00\x00\x00\xA1\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xD9\x58\x64\xD9\xC9\xD9\x58\x68\xD9\x58\x6C\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\x6A\x00\x6A\x00\x6A\x03\xE8\x00\x00\x00\x00\xD9\xEE\xA1\x00\x00\x00\x00\xD9\x50\x70\xD9\x50\x74\x6A\x00\xD9\x50\x78\xA1\x00\x00\x00\x00\xD9\x90\x8C\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xD9\x91\x88\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xD9\x5A\x7C\xA1\x00\x00\x00\x00\xC7\x40\x24\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xC7\x81\xD4\x02\x00\x00\x00\x00\x00\x00\xA1\x00\x00\x00\x00\x85\xC0\x74\x40\x8B\x50\x08\x8B\x4A\x04\x8B\x54\x01\x08\x8D\x4C\x01\x08\x8B\x42\x58\xFF\xD0\xD9\x05\x00\x00\x00\x00\xA1\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\x8B\x48\x08\xD9\x05\x00\x00\x00\x00\x8B\x51\x04\xD9\x5C\x02\x34\x8D\x44\x02\x08\xD9\xC9\xD9\x58\x30\xD9\x58\x34\xD9\x05\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xD8\x05\x00\x00\x00\x00\x6A\x01\x83\xEC\x0C\xD9\x5C\x24\x08\xD9\x05\x00\x00\x00\x00\xD9\x5C\x24\x04\xD9\x05\x00\x00\x00\x00\xD9\x1C\x24\xE8\x00\x00\x00\x00\xFF\x05\x00\x00\x00\x00\xD9\xC0\xD9\x05\x00\x00\x00\x00\xDA\xE9\xDF\xE0\xF6\xC4\x44\x7B\x0A\xA1\x00\x00\x00\x00\xD9\x58\x28\xEB\x02\xDD\xD8\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\x85\xC9\x0F\x84\x00\x00\x00\x00\x3B\x00\x00\x00\x00\x00\x0F\x84\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x85\xC0\x75\x13\x8B\x00\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x85\xC0\x0F\x84\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xA1\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\x6A\x01\xD9\x05\x00\x00\x00\x00\x83\xEC\x0C\xD9\x58\x64\xD9\xC9\xD9\x58\x68\xD9\x58\x6C\x8B\x00\x00\x00\x00\x00\xD9\x05\x00\x00\x00\x00\xD8\x05\x00\x00\x00\x00\xD9\x5C\x24\x08\xD9\x05\x00\x00\x00\x00\xD9\x5C\x24\x04\xD9\x05\x00\x00\x00\x00\xD9\x1C\x24\xE8\x00\x00\x00\x00\xD9\xC0\xD9\x05\x00\x00\x00\x00\xDA\xE9\xDF\xE0\xF6\xC4\x44\x7B\x14\x8B\x00\x00\x00\x00\x00\xD9\x59\x28\x8B\x00\x00\x00\x00\x00\xE9\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\xDD\xD8\xE9\x00\x00\x00\x00\xC3";
 	char* maskMLPTSC = "xx????x????xx????xx????xxxxxxxxxxxx?????x????x?????xxxxxxx????xxx????xxxxxxxxxxxx????xxxxxxx?????xxxxxxx?????xxxx????xxxxxxxx?????x????x?????xxxxxxxxxxx????xxxxxxxxxxxxxxxxxxxxxxxxx????x????xx????xxxxx????xxxxxxxxxxxxxxxxxxxxx????x?????xx????xxxxxxxxxxx????xxxxxx????xxxx????xx????xxxx????xxxxxxxxxx????xxxxxxxx?????x????x?????xxxx????x?????xx????x????xxxxx?????x????xxxx????xx????x????xx????xxxx????xxxxxxxxxxxxxxx?????xx????xx????xxxxxx????xxxxxx????xxxx????xxxx????xxxxxxxxxx?????xxxx?????x????x?????xxx????x";
 
 	// Pattern and mask for DoTheZone
-	const char* patternDoTheZone = "\xA1\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00\xC3\xCC\xCC\xCC\xCC\x81\xEC\x1C\x08\x00\x00\x53\x8B\x9C\x24\x24\x08\x00\x00\x84\xDB\x74\x4D\x80\xB9\x80\x2D\x00\x00\x00\x74\x3A\x8D\x44\x24\x04\x50\xC7\x44\x24\x08\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\x8B\x11\x8B\x92\xD0\x00\x00\x00\x6A\x01\x8D\x44\x24\x08\x50\xFF\xD2\x8B\x00\x00\x00\x00\x00\x8B\x01\x8B\x90\xD4\x00\x00\x00\x53\xFF\xD2\x5B\x81\xC4\x1C\x08\x00\x00\xC2\x04\x00";
+	const uint8_t patternDoTheZone[] = { 0xA1, 0x00, 0x00, 0x00, 0x00, 0x50, 0xE8, 0x00, 0x00, 0x00, 0x00, 0xC3, 0xCC, 0xCC, 0xCC, 0xCC, 0x81, 0xEC, 0x1C, 0x08, 0x00, 0x00, 0x53, 0x8B, 0x9C, 0x24, 0x24, 0x08, 0x00, 0x00, 0x84, 0xDB, 0x74, 0x4D, 0x80, 0xB9, 0x80, 0x2D, 0x00, 0x00, 0x00, 0x74, 0x3A, 0x8D, 0x44, 0x24, 0x04, 0x50, 0xC7, 0x44, 0x24, 0x08, 0x00, 0x00, 0x00, 0x00, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x8B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8B, 0x11, 0x8B, 0x92, 0xD0, 0x00, 0x00, 0x00, 0x6A, 0x01, 0x8D, 0x44, 0x24, 0x08, 0x50, 0xFF, 0xD2, 0x8B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8B, 0x01, 0x8B, 0x90, 0xD4, 0x00, 0x00, 0x00, 0x53, 0xFF, 0xD2, 0x5B, 0x81, 0xC4, 0x1C, 0x08, 0x00, 0x00, 0xC2, 0x04, 0x00 };
+	//const char* patternDoTheZone = "\xA1\x00\x00\x00\x00\x50\xE8\x00\x00\x00\x00\xC3\xCC\xCC\xCC\xCC\x81\xEC\x1C\x08\x00\x00\x53\x8B\x9C\x24\x24\x08\x00\x00\x84\xDB\x74\x4D\x80\xB9\x80\x2D\x00\x00\x00\x74\x3A\x8D\x44\x24\x04\x50\xC7\x44\x24\x08\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x8B\x00\x00\x00\x00\x00\x8B\x11\x8B\x92\xD0\x00\x00\x00\x6A\x01\x8D\x44\x24\x08\x50\xFF\xD2\x8B\x00\x00\x00\x00\x00\x8B\x01\x8B\x90\xD4\x00\x00\x00\x53\xFF\xD2\x5B\x81\xC4\x1C\x08\x00\x00\xC2\x04\x00";
 	const char* maskDoTheZone = "x????xx????xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx????x?????xxxxxxxxxxxxxxxxxx?????xxxxxxxxxxxxxxxxxxxxx";
 
-	SignatureScanner SigScanner;
-	if (SigScanner.GetProcess("eqgame.exe"))
-	{
-		module mod = SigScanner.GetModule("eqgame.exe");
-		// scanning for the address of the variable:
-		DWORD PlayerStructBase = SigScanner.FindSignature(mod.dwBase, mod.dwSize, patternMLPTSC, maskMLPTSC);
-		CDisplay__MoveLocalPlayerToSafeCoords = PlayerStructBase;
-		std::string message1 = "[MQ2RWarp]CDisplay__MoveLocalPlayerToSafeCoords: " + DWORDToHexString(PlayerStructBase, 6);
-		WriteChatColor(message1.c_str(), CONCOLOR_RED);
+	CDisplay__MoveLocalPlayerToSafeCoords = FindPattern(EQGameBaseAddress, modInfo.SizeOfImage, patternMLPTSC, maskMLPTSC);
+	LocalCEverQuest__DoTheZone = FindPattern(EQGameBaseAddress, modInfo.SizeOfImage, patternDoTheZone, maskDoTheZone);
 
-		DWORD PlayerStructBase2 = SigScanner.FindSignature(mod.dwBase, mod.dwSize, patternDoTheZone, maskDoTheZone);
-		LocalCEverQuest__DoTheZone = PlayerStructBase2;
-		std::string message2 = "[MQ2RWarp]LocalCEverQuest__DoTheZone: " + DWORDToHexString(PlayerStructBase2, 6);
-		WriteChatColor(message2.c_str(), CONCOLOR_RED);
-		getchar();
-	} else {
-		std::string message3 = "[MQ2RWarp]Failed to get: CDisplay__MoveLocalPlayerToSafeCoords";
-		WriteChatColor(message3.c_str(), CONCOLOR_RED);
-		std::string message4 = "[MQ2RWarp]Failed to get: LocalCEverQuest__DoTheZone";
-		WriteChatColor(message4.c_str(), CONCOLOR_RED);
-	}
+	WriteChatf("[MQ2RWarp] CDisplay__MoveLocalPlayerToSafeCoords: 0x%p", (void*)CDisplay__MoveLocalPlayerToSafeCoords);
+	WriteChatf("[MQ2RWarp] LocalCEverQuest__DoTheZone: 0x%p", (void*)LocalCEverQuest__DoTheZone);
 }
 
 VOID ShowOffsets()
